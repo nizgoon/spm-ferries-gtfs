@@ -161,6 +161,7 @@ def build_tables():
         "feed_publisher_url": SOURCE_URL,
         "feed_lang": "fr",
         "feed_version": f"fares-transcribed-{TRANSCRIBED_ON}",
+        "feed_contact_email": "derek@transit.app",
     }]
 
     return {
@@ -191,6 +192,20 @@ def merge_into_gtfs_zip(fares_tables, existing_gtfs_zip, out_path):
     zip (e.g. the one produced by spm_gtfs.py) so you end up with one feed."""
     with zipfile.ZipFile(existing_gtfs_zip, "r") as zin:
         existing = {name: zin.read(name) for name in zin.namelist()}
+
+    # Pull the schedule feed's actual service date range out of
+    # calendar_dates.txt so feed_info.txt's feed_start_date/feed_end_date
+    # reflect real dates instead of being left blank.
+    fares_tables = {k: v for k, v in fares_tables.items()}  # shallow copy
+    if "calendar_dates.txt" in existing and fares_tables.get("feed_info.txt"):
+        reader = csv.DictReader(io.StringIO(existing["calendar_dates.txt"].decode("utf-8")))
+        dates = sorted(row["date"] for row in reader)
+        if dates:
+            info_row = dict(fares_tables["feed_info.txt"][0])
+            info_row["feed_start_date"] = dates[0]
+            info_row["feed_end_date"] = dates[-1]
+            fares_tables["feed_info.txt"] = [info_row]
+
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zout:
         for name, data in existing.items():
             if name == "feed_info.txt":
