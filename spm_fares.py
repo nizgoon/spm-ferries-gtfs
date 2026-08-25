@@ -51,37 +51,56 @@ SOURCE_URL = "https://www.spm-ferries.fr/horaires-et-tarifs/tarifs-2019/"
 TRANSCRIBED_ON = "2026-08-25"
 CURRENCY = "EUR"
 
-# (route_group_id, area_a, area_b, rider_category_id, rider_category_name, one_way, return)
+# (route_group_id, area_a, area_b, rider_category_id, one_way, return)
 FARES = [
     # Saint-Pierre <-> Miquelon
-    ("STP_MIQ", "STP", "MIQ", "adult",    "Adult",                                   16.00, 24.00),
-    ("STP_MIQ", "STP", "MIQ", "reduit_1", "Reduced (child 2-11, disabled, 60+)",      10.00, 13.00),
+    ("STP_MIQ", "STP", "MIQ", "adult",    16.00, 24.00),
+    ("STP_MIQ", "STP", "MIQ", "reduit_1", 10.00, 13.00),
 
     # Saint-Pierre <-> Langlade
-    ("STP_LAN", "STP", "LAN", "adult",    "Adult",                                   10.00, 17.00),
-    ("STP_LAN", "STP", "LAN", "reduit_1", "Reduced (child 2-11, disabled, 60+)",       5.00,  8.00),
+    ("STP_LAN", "STP", "LAN", "adult",    10.00, 17.00),
+    ("STP_LAN", "STP", "LAN", "reduit_1",  5.00,  8.00),
 
     # Saint-Pierre <-> Fortune  (same tariff as Miquelon <-> Fortune)
-    ("STP_FOR", "STP", "FOR", "adult",    "Adult (12-59)",                           45.00, 73.00),
-    ("STP_FOR", "STP", "FOR", "reduit_2", "Reduced (child 2-11)",                    35.00, 49.00),
-    ("STP_FOR", "STP", "FOR", "reduit_3", "Reduced (disabled)",                      35.00, 49.00),
-    ("STP_FOR", "STP", "FOR", "reduit_4", "Reduced (60 and over)",                   40.00, 68.00),
+    ("STP_FOR", "STP", "FOR", "adult",    45.00, 73.00),
+    ("STP_FOR", "STP", "FOR", "reduit_2", 35.00, 49.00),
+    ("STP_FOR", "STP", "FOR", "reduit_3", 35.00, 49.00),
+    ("STP_FOR", "STP", "FOR", "reduit_4", 40.00, 68.00),
 
     # Miquelon <-> Fortune (same tariff table as Saint-Pierre <-> Fortune)
-    ("MIQ_FOR", "MIQ", "FOR", "adult",    "Adult (12-59)",                           45.00, 73.00),
-    ("MIQ_FOR", "MIQ", "FOR", "reduit_2", "Reduced (child 2-11)",                    35.00, 49.00),
-    ("MIQ_FOR", "MIQ", "FOR", "reduit_3", "Reduced (disabled)",                      35.00, 49.00),
-    ("MIQ_FOR", "MIQ", "FOR", "reduit_4", "Reduced (60 and over)",                   40.00, 68.00),
+    ("MIQ_FOR", "MIQ", "FOR", "adult",    45.00, 73.00),
+    ("MIQ_FOR", "MIQ", "FOR", "reduit_2", 35.00, 49.00),
+    ("MIQ_FOR", "MIQ", "FOR", "reduit_3", 35.00, 49.00),
+    ("MIQ_FOR", "MIQ", "FOR", "reduit_4", 40.00, 68.00),
 ]
 
+# Feed language is French (matches agency_lang="fr" in spm_gtfs.py and
+# feed_lang below -- these two must agree or gtfs-validator flags
+# feed_info_lang_and_agency_lang_mismatch).
 RIDER_CATEGORIES = {
-    "adult":    ("Adult", 1),
-    "reduit_1": ("Reduced 1 (child 2-11, person with disability, 60 and over) — STP/MIQ and STP/LAN routes", 0),
-    "reduit_2": ("Reduced 2 (child 2-11) — Fortune routes", 0),
-    "reduit_3": ("Reduced 3 (person with disability) — Fortune routes", 0),
-    "reduit_4": ("Reduced 4 (60 and over) — Fortune routes", 0),
+    "adult":    ("Adulte", 1),
+    "reduit_1": ("Tarif réduit 1 (enfant 2-11 ans, personne en situation de handicap, "
+                 "60 ans et plus) — lignes Saint-Pierre/Miquelon et Saint-Pierre/Langlade", 0),
+    "reduit_2": ("Tarif réduit 2 (enfant 2-11 ans) — ligne Fortune", 0),
+    "reduit_3": ("Tarif réduit 3 (personne en situation de handicap) — ligne Fortune", 0),
+    "reduit_4": ("Tarif réduit 4 (60 ans et plus) — ligne Fortune", 0),
 }
 
+# Short French labels for fare_product_name (the RIDER_CATEGORIES names
+# above are the full accessibility-oriented descriptions used in
+# rider_categories.txt; product names want something shorter).
+RIDER_SHORT_NAME = {
+    "adult": "Adulte",
+    "reduit_1": "Tarif réduit 1",
+    "reduit_2": "Tarif réduit 2",
+    "reduit_3": "Tarif réduit 3",
+    "reduit_4": "Tarif réduit 4",
+}
+
+# Full French place names, used for fare_product_name. Fortune stays in
+# English (see spm_gtfs.py's DISPLAY_NAME / stop_name for the same
+# reasoning): it's an anglophone Newfoundland town, and "Fortune" is
+# spelled the same either way, so no translation needed there anyway.
 AREAS = {
     "STP": "Saint-Pierre",
     "MIQ": "Miquelon",
@@ -105,20 +124,22 @@ def build_tables():
     fare_products_rows = []
     fare_leg_rules_rows = []
 
-    for route_group, area_a, area_b, rider_id, _rider_name, one_way, return_fare in FARES:
+    for route_group, area_a, area_b, rider_id, one_way, return_fare in FARES:
         ow_id = f"{route_group}_{rider_id}_OW"
         rt_id = f"{route_group}_{rider_id}_RT"
+        rider_short = RIDER_SHORT_NAME[rider_id]
+        place_a, place_b = AREAS[area_a], AREAS[area_b]
 
         fare_products_rows.append({
             "fare_product_id": ow_id,
-            "fare_product_name": f"{route_group.replace('_', '-')} one-way ({RIDER_CATEGORIES[rider_id][0].split(' —')[0]})",
+            "fare_product_name": f"{place_a} \u2013 {place_b} aller simple ({rider_short})",
             "rider_category_id": rider_id,
             "amount": f"{one_way:.2f}",
             "currency": CURRENCY,
         })
         fare_products_rows.append({
             "fare_product_id": rt_id,
-            "fare_product_name": f"{route_group.replace('_', '-')} return ({RIDER_CATEGORIES[rider_id][0].split(' —')[0]})",
+            "fare_product_name": f"{place_a} \u2013 {place_b} aller-retour ({rider_short})",
             "rider_category_id": rider_id,
             "amount": f"{return_fare:.2f}",
             "currency": CURRENCY,
@@ -138,7 +159,7 @@ def build_tables():
     feed_info_note = [{
         "feed_publisher_name": "SPM Ferries (unofficial, manually transcribed)",
         "feed_publisher_url": SOURCE_URL,
-        "feed_lang": "en",
+        "feed_lang": "fr",
         "feed_version": f"fares-transcribed-{TRANSCRIBED_ON}",
     }]
 

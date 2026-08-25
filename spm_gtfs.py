@@ -60,6 +60,11 @@ USER_AGENT = "Mozilla/5.0 (compatible; spm-gtfs-scraper/1.0)"
 # Port id -> canonical info. Coordinates are approximate (harbor/quay
 # locations); refine if you have surveyed coordinates.
 #
+# stop_name: feed language is French (agency_lang="fr"), so these are in
+# French -- except Fortune, which stays in English since it's an
+# anglophone Newfoundland town and "Fortune, NL" is how it's actually
+# referred to (a French translation would look odd/invented).
+#
 # stop_timezone: Fortune (Newfoundland) is in America/St_Johns (UTC-3:30 /
 # UTC-2:30 DST), while Saint-Pierre, Miquelon, and Langlade are all in
 # America/Miquelon (UTC-3 / UTC-2 DST) — a 30-minute offset. The raw API's
@@ -67,19 +72,32 @@ USER_AGENT = "Mozilla/5.0 (compatible; spm-gtfs-scraper/1.0)"
 # local time (confirmed empirically: naive STP->FOR duration reads 60 min,
 # FOR->STP reads 120 min for the same physical ~90 min crossing — the
 # asymmetry is exactly the 30-minute tz gap applied in opposite
-# directions). So the wall-clock values we write to stop_times.txt are
-# already correct; they just need Fortune's stop_timezone set so GTFS
-# consumers resolve elapsed/absolute time correctly instead of assuming
-# everything is in agency_timezone.
+# directions; also cross-checked against SPM's own official Miquelon<->
+# Fortune PDF calendar, which labels its times "HEURE LOCALE / LOCAL
+# TIME" and matches our scraped data exactly). So the wall-clock values
+# we write to stop_times.txt are already correct; they just need
+# Fortune's stop_timezone set so GTFS consumers resolve elapsed/absolute
+# time correctly instead of assuming everything is in agency_timezone.
 PORTS = {
-    1: {"name": "SAINT PIERRE", "stop_id": "STP", "stop_name": "Saint-Pierre Ferry Terminal",
+    1: {"name": "SAINT PIERRE", "stop_id": "STP", "stop_name": "Gare maritime de Saint-Pierre",
         "lat": 46.7778, "lon": -56.1719, "stop_timezone": None},
-    2: {"name": "MIQUELON", "stop_id": "MIQ", "stop_name": "Miquelon Ferry Terminal",
+    2: {"name": "MIQUELON", "stop_id": "MIQ", "stop_name": "Gare maritime de Miquelon",
         "lat": 47.0958, "lon": -56.3789, "stop_timezone": None},
-    3: {"name": "FORTUNE", "stop_id": "FOR", "stop_name": "Fortune Ferry Terminal (Newfoundland)",
+    3: {"name": "FORTUNE", "stop_id": "FOR", "stop_name": "Fortune Ferry Terminal",
         "lat": 47.0736, "lon": -55.8330, "stop_timezone": "America/St_Johns"},
-    4: {"name": "LANGLADE", "stop_id": "LAN", "stop_name": "Langlade Ferry Landing",
+    4: {"name": "LANGLADE", "stop_id": "LAN", "stop_name": "Débarcadère de Langlade",
         "lat": 46.9500, "lon": -56.2900, "stop_timezone": None},
+}
+
+# Proper French display form of each raw API place name, used for
+# route_long_name / trip_headsign. NAME_TO_STOP_ID's raw keys ("SAINT
+# PIERRE" etc.) come from the API in all-caps with no hyphen, so a plain
+# .title() call would produce "Saint Pierre" instead of "Saint-Pierre".
+DISPLAY_NAME = {
+    "SAINT PIERRE": "Saint-Pierre",
+    "MIQUELON": "Miquelon",
+    "FORTUNE": "Fortune",
+    "LANGLADE": "Langlade",
 }
 NAME_TO_STOP_ID = {p["name"]: p["stop_id"] for p in PORTS.values()}
 STOP_ID_TO_TIMEZONE = {p["stop_id"]: (p["stop_timezone"] or "America/Miquelon") for p in PORTS.values()}
@@ -297,7 +315,7 @@ def build_gtfs(legs, feed_start, feed_end):
                 "route_id": route_id,
                 "agency_id": "SPM",
                 "route_short_name": route_id,
-                "route_long_name": f"{name_a.title()} - {name_b.title()}",
+                "route_long_name": f"{DISPLAY_NAME.get(name_a, name_a)} - {DISPLAY_NAME.get(name_b, name_b)}",
                 "route_type": 4,  # ferry
             }
 
@@ -313,7 +331,7 @@ def build_gtfs(legs, feed_start, feed_end):
             "trip_id": trip_id,
             "direction_id": direction_id,
             "trip_short_name": leg["cruise_code"],
-            "trip_headsign": leg["to_name"].title(),
+            "trip_headsign": DISPLAY_NAME.get(leg["to_name"], leg["to_name"]),
         })
 
         stop_times_rows.append({
