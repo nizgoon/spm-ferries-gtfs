@@ -42,7 +42,7 @@ No dependencies beyond the Python standard library. A GitHub Actions workflow
 The latest combined feed is always available at:
 
 ```
-https://raw.githubusercontent.com/<your-username>/spm-ferries-gtfs/main/latest/spm_gtfs.zip
+https://raw.githubusercontent.com/nizgoon/spm-ferries-gtfs/main/latest/spm_gtfs.zip
 ```
 
 Point any GTFS-consuming tool (OpenTripPlanner, a GTFS validator, your own app) at that URL.
