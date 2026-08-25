@@ -51,6 +51,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 WIDGET_URL = "https://horaires.spm-ferries.fr/afficheur-web.php?cie=SPM&langue=en_EN&ver=4445546"
 API_BASE = "https://api.ls-resa.fr/LSRest2/SPM/LS_STE_DEPART_CRO/"
@@ -58,19 +59,71 @@ USER_AGENT = "Mozilla/5.0 (compatible; spm-gtfs-scraper/1.0)"
 
 # Port id -> canonical info. Coordinates are approximate (harbor/quay
 # locations); refine if you have surveyed coordinates.
+#
+# stop_timezone: Fortune (Newfoundland) is in America/St_Johns (UTC-3:30 /
+# UTC-2:30 DST), while Saint-Pierre, Miquelon, and Langlade are all in
+# America/Miquelon (UTC-3 / UTC-2 DST) — a 30-minute offset. The raw API's
+# dateHeureDepart/dateHeureArrive are each recorded in *their own port's*
+# local time (confirmed empirically: naive STP->FOR duration reads 60 min,
+# FOR->STP reads 120 min for the same physical ~90 min crossing — the
+# asymmetry is exactly the 30-minute tz gap applied in opposite
+# directions). So the wall-clock values we write to stop_times.txt are
+# already correct; they just need Fortune's stop_timezone set so GTFS
+# consumers resolve elapsed/absolute time correctly instead of assuming
+# everything is in agency_timezone.
 PORTS = {
     1: {"name": "SAINT PIERRE", "stop_id": "STP", "stop_name": "Saint-Pierre Ferry Terminal",
-        "lat": 46.7778, "lon": -56.1719},
+        "lat": 46.7778, "lon": -56.1719, "stop_timezone": None},
     2: {"name": "MIQUELON", "stop_id": "MIQ", "stop_name": "Miquelon Ferry Terminal",
-        "lat": 47.0958, "lon": -56.3789},
+        "lat": 47.0958, "lon": -56.3789, "stop_timezone": None},
     3: {"name": "FORTUNE", "stop_id": "FOR", "stop_name": "Fortune Ferry Terminal (Newfoundland)",
-        "lat": 47.0736, "lon": -55.8330},
+        "lat": 47.0736, "lon": -55.8330, "stop_timezone": "America/St_Johns"},
     4: {"name": "LANGLADE", "stop_id": "LAN", "stop_name": "Langlade Ferry Landing",
-        "lat": 46.9500, "lon": -56.2900},
+        "lat": 46.9500, "lon": -56.2900, "stop_timezone": None},
 }
 NAME_TO_STOP_ID = {p["name"]: p["stop_id"] for p in PORTS.values()}
+STOP_ID_TO_TIMEZONE = {p["stop_id"]: (p["stop_timezone"] or "America/Miquelon") for p in PORTS.values()}
 
 TIMEZONE = "America/Miquelon"
+
+
+def sanity_check_legs(legs, min_minutes=5, max_minutes=360, verbose=True):
+    """Verify each leg's REAL elapsed travel time using proper IANA
+    timezone conversion (zoneinfo) rather than assuming a fixed offset.
+
+    dep_dt/arr_dt are naive local times, each already in *their own port's*
+    timezone (see PORTS docstring). We localize each to its correct zone
+    and convert to UTC before diffing, so this is automatically correct
+    across DST transitions even if SPM and Newfoundland ever change clocks
+    on different dates in the future (checked 2020-2030: they currently
+    don't -- the gap is a constant 30 minutes -- but we don't want to bake
+    that constant in anywhere; this check re-derives it from real tz data
+    every time instead).
+
+    This also serves as an independent check for bad data (e.g. would have
+    caught the "MODIFS PAYANTES" administrative placeholder records on its
+    own, since a real port-to-port sailing should always land between
+    min_minutes and max_minutes)."""
+    problems = []
+    for leg in legs:
+        from_id = NAME_TO_STOP_ID.get(leg["from_name"])
+        to_id = NAME_TO_STOP_ID.get(leg["to_name"])
+        if not from_id or not to_id:
+            continue
+        dep_aware = datetime.fromisoformat(leg["dep_dt"]).replace(
+            tzinfo=ZoneInfo(STOP_ID_TO_TIMEZONE[from_id]))
+        arr_aware = datetime.fromisoformat(leg["arr_dt"]).replace(
+            tzinfo=ZoneInfo(STOP_ID_TO_TIMEZONE[to_id]))
+        real_minutes = (arr_aware - dep_aware).total_seconds() / 60
+        if not (min_minutes <= real_minutes <= max_minutes):
+            problems.append((leg, real_minutes))
+    if problems and verbose:
+        print(f"Warning: {len(problems)} leg(s) have implausible real "
+              f"(timezone-corrected) travel time:", file=sys.stderr)
+        for leg, mins in problems[:10]:
+            print(f"  {leg['from_name']} -> {leg['to_name']} at {leg['dep_dt']}: "
+                  f"{mins:.0f} real minutes (boat={leg['boat']!r})", file=sys.stderr)
+    return problems
 
 
 def fetch_token():
@@ -214,6 +267,7 @@ def build_gtfs(legs, feed_start, feed_end):
         "stop_lat": p["lat"],
         "stop_lon": p["lon"],
         "location_type": 0,
+        "stop_timezone": p["stop_timezone"] or "",
     } for p in PORTS.values()]
 
     routes = {}       # route_id -> row
@@ -342,6 +396,7 @@ def main():
     legs = collect_all_legs(date_start, date_end)
     legs = dedupe_legs(legs)
     legs = filter_administrative_legs(legs)
+    sanity_check_legs(legs)  # diagnostic only; doesn't drop anything itself
     print(f"Collected {len(legs)} sailing legs", file=sys.stderr)
 
     if args.raw_json:
