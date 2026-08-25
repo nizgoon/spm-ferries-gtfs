@@ -166,6 +166,33 @@ def dedupe_legs(legs):
     return out
 
 
+# Real sailings only ever show up with these two boats (188 and 120 seats
+# respectively). The booking system also emits administrative placeholder
+# "cruises" — observed boat name "MODIFS PAYANTES" ("paid modifications"),
+# sentinel capacity of 10000 seats, no real departure/arrival (e.g. a
+# 40km crossing in "1 minute") — that aren't real sailings and would
+# otherwise show up as physically-impossible trips in a GTFS validator.
+NON_SAILING_BOATS = {"MODIFS PAYANTES"}
+MAX_PLAUSIBLE_CAPACITY = 500  # real boats are 120-188 seats; 10000 is a sentinel
+
+
+def filter_administrative_legs(legs, verbose=True):
+    """Drop non-sailing placeholder records the booking system emits."""
+    kept, dropped = [], []
+    for leg in legs:
+        if leg["boat"] in NON_SAILING_BOATS or (
+            leg["seats_total"] is not None and leg["seats_total"] > MAX_PLAUSIBLE_CAPACITY
+        ):
+            dropped.append(leg)
+        else:
+            kept.append(leg)
+    if dropped and verbose:
+        print(f"Filtered {len(dropped)} administrative/placeholder record(s) "
+              f"(e.g. boat={dropped[0]['boat']!r}, seats_total={dropped[0]['seats_total']})",
+              file=sys.stderr)
+    return kept
+
+
 # ---------------------------------------------------------------------------
 # GTFS construction
 # ---------------------------------------------------------------------------
@@ -314,6 +341,7 @@ def main():
 
     legs = collect_all_legs(date_start, date_end)
     legs = dedupe_legs(legs)
+    legs = filter_administrative_legs(legs)
     print(f"Collected {len(legs)} sailing legs", file=sys.stderr)
 
     if args.raw_json:
