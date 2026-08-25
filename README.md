@@ -26,6 +26,9 @@ prices directly with SPM Ferries before travel.**
 - **Fares** are hand-transcribed from SPM's static tariff page (not from an API — see comments in
   `spm_fares.py` for the source URL and transcription date) and only cover core adult/reduced fares.
   Group, school, bike, pet, multi-ride card, and PASS SPM fares are not yet included.
+- All rider-facing text (`stop_name`, `route_long_name`, fare product/rider category names) is in
+  French, matching `agency_lang`/`feed_lang: fr` — except Fortune, which stays in English (`Fortune
+  Ferry Terminal`) since it's an anglophone Newfoundland town.
 
 ## Data quality notes
 
@@ -41,9 +44,19 @@ prices directly with SPM Ferries before travel.**
 - **The booking system emits administrative placeholder records** (observed boat name
   `MODIFS PAYANTES`, a sentinel capacity of 10,000 seats) that aren't real sailings. `spm_gtfs.py`
   filters these out before building the feed.
+- **Bikes are carried** on all SPM Ferries sailings, so every trip sets `bikes_allowed: 1`.
+- `feed_info.txt`'s `feed_start_date`/`feed_end_date` are derived automatically from the actual
+  min/max dates in `calendar_dates.txt` at merge time — not hardcoded — so they stay accurate as the
+  published schedule window rolls forward each week.
 - The feed has been validated with [MobilityData's canonical `gtfs-validator`](https://github.com/MobilityData/gtfs-validator)
-  with zero errors — only a handful of optional best-practice warnings (missing `bikes_allowed`,
-  no feed contact email, a couple of naming-convention nits).
+  with **zero errors and zero warnings**, except one left in deliberately:
+  `mixed_case_recommended_field` on `route_short_name`/`trip_short_name` (e.g. `STP-MIQ`). These are
+  short, all-caps route/station-code style identifiers — the same convention used by rail and ferry
+  systems generally — and `trip_short_name` is SPM's own internal cruise code (kept verbatim for
+  traceability back to the source data), not a per-sailing number: ferries generally don't have a
+  flight-number-style trip ID the way airlines/trains do, and SPM's schedule data doesn't expose one
+  either (its `seqc` field looked promising but turned out to be a repeating timetable-slot ID, not a
+  per-sailing number).
 
 ## Regenerating the feed
 
@@ -64,6 +77,8 @@ https://raw.githubusercontent.com/nizgoon/spm-ferries-gtfs/main/latest/spm_gtfs.
 ```
 
 Point any GTFS-consuming tool (OpenTripPlanner, a GTFS validator, your own app) at that URL.
+
+Questions or issues with the feed: derek@transit.app (also set as `feed_contact_email` in `feed_info.txt`).
 
 ## License
 
