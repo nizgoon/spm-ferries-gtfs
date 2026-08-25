@@ -27,6 +27,24 @@ prices directly with SPM Ferries before travel.**
   `spm_fares.py` for the source URL and transcription date) and only cover core adult/reduced fares.
   Group, school, bike, pet, multi-ride card, and PASS SPM fares are not yet included.
 
+## Data quality notes
+
+- **Fortune (Newfoundland) is a different timezone from the rest of the network.** Saint-Pierre,
+  Miquelon, and Langlade are all `America/Miquelon`; Fortune is `America/St_Johns`, 30 minutes behind.
+  `stops.txt` sets `stop_timezone` accordingly so any standards-compliant GTFS consumer computes
+  correct crossing times automatically. This was cross-checked against SPM's own official
+  Miquelon↔Fortune PDF calendar (which labels its times "HEURE LOCALE / LOCAL TIME") and matched
+  exactly. `spm_gtfs.py` also runs an independent `zoneinfo`-based sanity check (not a hardcoded
+  30-minute assumption — it re-derives real elapsed time from IANA tz data on every run, so it stays
+  correct even if either region's DST rules ever change) that flags any leg whose real travel time
+  looks physically implausible.
+- **The booking system emits administrative placeholder records** (observed boat name
+  `MODIFS PAYANTES`, a sentinel capacity of 10,000 seats) that aren't real sailings. `spm_gtfs.py`
+  filters these out before building the feed.
+- The feed has been validated with [MobilityData's canonical `gtfs-validator`](https://github.com/MobilityData/gtfs-validator)
+  with zero errors — only a handful of optional best-practice warnings (missing `bikes_allowed`,
+  no feed contact email, a couple of naming-convention nits).
+
 ## Regenerating the feed
 
 ```bash
