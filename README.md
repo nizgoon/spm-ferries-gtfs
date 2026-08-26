@@ -83,4 +83,4 @@ Questions or issues with the feed: derek@transit.app (also set as `feed_contact_
 ## License
 
 Code in this repo is MIT licensed (see `LICENSE`). The underlying schedule and fare data belongs to
-SPM Ferries; this repo only republishes it in a machine-readable format for personal/non-commercial use.
+SPM Ferries; this repo only republishes it in a machine-readable format.
