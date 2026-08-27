@@ -12,11 +12,14 @@ prices directly with SPM Ferries before travel.**
 ## What's here
 
 - `spm_gtfs.py` — scrapes SPM's public schedule widget (`horaires.spm-ferries.fr`) and the LS-Résa
-  booking API it calls, and builds a standard GTFS schedule feed.
+  booking API it calls, and builds a standard GTFS schedule feed, including `booking_rules.txt` and a
+  `stops.txt`/`pathways.txt` station hierarchy (see below).
 - `spm_fares.py` — builds a GTFS-Fares v2 fares module (adult + reduced fares, one-way/return, for the
   Saint-Pierre↔Miquelon, Saint-Pierre↔Langlade, and Saint-Pierre/Miquelon↔Fortune routes) from SPM's
   published tariff table, and can merge it into the schedule feed above.
 - `latest/spm_gtfs.zip` — the most recently generated combined feed (refreshed weekly, see below).
+- `latest/gtfs/` — the same feed, unzipped into its individual GTFS `.txt` files, so changes to a
+  single file are visible in a normal diff instead of being buried in a binary zip.
 
 ## How the data is sourced
 
@@ -47,22 +50,31 @@ prices directly with SPM Ferries before travel.**
 - **Bikes are carried** on all SPM Ferries sailings, so every trip sets `bikes_allowed: 1`.
 - `feed_info.txt`'s `feed_start_date`/`feed_end_date` are derived automatically from the actual
   min/max dates in `calendar_dates.txt` at merge time — not hardcoded — so they stay accurate as the
-  published schedule window rolls forward each week.
+  published schedule window rolls forward each week. `feed_version` is stamped with the UTC timestamp
+  of the generation run, so consumers can tell which weekly refresh they're looking at.
+- Every sailing requires a reservation, so `stop_times.txt` sets `pickup_type: 1` (no boarding without
+  booking) with a `booking_rules.txt` reference. Most sailings require booking at least 1 hour ahead;
+  Fortune departures before 9:00 AM require booking by 16:00 the day before, which `spm_gtfs.py`
+  converts from Fortune (`America/St_Johns`) into `agency_timezone` (`America/Miquelon`) via `zoneinfo`
+  rather than hardcoding a fixed offset, so it stays correct if the 30-minute gap ever changes.
+- Each port's station in `stops.txt` is split into boarding platforms (`location_type: 0`) and
+  entrances (`location_type: 2`) connected by `pathways.txt`, with `traversal_time` set to the real
+  lead time a rider needs — e.g. Fortune's Canadian customs control needs 2 hours, so a Fortune-bound
+  sailing's platform is 2 hours' pathway-walk from its entrance. This lets a pathways-aware trip
+  planner surface the true show-up time instead of assuming an ordinary walk/wait.
 - The feed has been validated with [MobilityData's canonical `gtfs-validator`](https://github.com/MobilityData/gtfs-validator)
   with **zero errors and zero warnings**, except one left in deliberately:
-  `mixed_case_recommended_field` on `route_short_name`/`trip_short_name` (e.g. `STP-MIQ`). These are
-  short, all-caps route/station-code style identifiers — the same convention used by rail and ferry
-  systems generally — and `trip_short_name` is SPM's own internal cruise code (kept verbatim for
-  traceability back to the source data), not a per-sailing number: ferries generally don't have a
-  flight-number-style trip ID the way airlines/trains do, and SPM's schedule data doesn't expose one
-  either (its `seqc` field looked promising but turned out to be a repeating timetable-slot ID, not a
-  per-sailing number).
+  `mixed_case_recommended_field` on `route_short_name` (e.g. `STP-MIQ`). These are short, all-caps
+  route/station-code style identifiers — the same convention used by rail and ferry systems generally.
+  (`trip_short_name` was previously populated with SPM's internal cruise code but has since been
+  dropped, since it wasn't a real per-sailing identifier the way a flight or train number is.)
 
 ## Regenerating the feed
 
 ```bash
 python3 spm_gtfs.py --days-ahead 180 --out spm_gtfs.zip
-python3 spm_fares.py --merge-into spm_gtfs.zip --merged-out spm_gtfs_with_fares.zip
+python3 spm_fares.py --merge-into spm_gtfs.zip --merged-out spm_gtfs_with_fares.zip \
+  --unzipped-out latest/gtfs
 ```
 
 No dependencies beyond the Python standard library. A GitHub Actions workflow
