@@ -50,7 +50,7 @@ import sys
 import urllib.error
 import urllib.request
 import zipfile
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 WIDGET_URL = "https://horaires.spm-ferries.fr/afficheur-web.php?cie=SPM&langue=en_EN&ver=4445546"
@@ -510,6 +510,7 @@ def build_gtfs(legs, feed_start, feed_end):
         "feed_start_date": feed_start.replace("-", ""),
         "feed_end_date": feed_end.replace("-", ""),
         "feed_contact_email": "derek@transit.app",
+        "feed_version": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
     }]
 
     if skipped:
