@@ -1,0 +1,6 @@
+rider_category_id,rider_category_name,is_default_fare_category
+adult,Adulte,1
+reduit_1,"Tarif réduit 1 (enfant 2-11 ans, personne en situation de handicap, 60 ans et plus) — lignes Saint-Pierre/Miquelon et Saint-Pierre/Langlade",0
+reduit_2,Tarif réduit 2 (enfant 2-11 ans) — ligne Fortune,0
+reduit_3,Tarif réduit 3 (personne en situation de handicap) — ligne Fortune,0
+reduit_4,Tarif réduit 4 (60 ans et plus) — ligne Fortune,0

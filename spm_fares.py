@@ -45,10 +45,9 @@ line-item prices for that leg, same as the human-readable price table.
 
 import csv
 import io
+import os
 import zipfile
 
-SOURCE_URL = "https://www.spm-ferries.fr/horaires-et-tarifs/tarifs-2019/"
-TRANSCRIBED_ON = "2026-08-25"
 CURRENCY = "EUR"
 
 # (route_group_id, area_a, area_b, rider_category_id, one_way, return)
@@ -74,9 +73,6 @@ FARES = [
     ("MIQ_FOR", "MIQ", "FOR", "reduit_4", 40.00, 68.00),
 ]
 
-# Feed language is French (matches agency_lang="fr" in spm_gtfs.py and
-# feed_lang below -- these two must agree or gtfs-validator flags
-# feed_info_lang_and_agency_lang_mismatch).
 RIDER_CATEGORIES = {
     "adult":    ("Adulte", 1),
     "reduit_1": ("Tarif réduit 1 (enfant 2-11 ans, personne en situation de handicap, "
@@ -156,70 +152,65 @@ def build_tables():
                     "fare_product_id": prod_id,
                 })
 
-    feed_info_note = [{
-        "feed_publisher_name": "SPM Ferries (unofficial, manually transcribed)",
-        "feed_publisher_url": SOURCE_URL,
-        "feed_lang": "fr",
-        "feed_version": f"fares-transcribed-{TRANSCRIBED_ON}",
-        "feed_contact_email": "derek@transit.app",
-    }]
-
     return {
         "rider_categories.txt": rider_categories_rows,
         "areas.txt": areas_rows,
         "stop_areas.txt": stop_areas_rows,
         "fare_products.txt": fare_products_rows,
         "fare_leg_rules.txt": fare_leg_rules_rows,
-        "feed_info.txt": feed_info_note,
     }
+
+
+def _rows_to_csv(rows):
+    buf = io.StringIO()
+    if rows:
+        fieldnames = list(rows[0].keys())
+        writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+    return buf.getvalue()
 
 
 def write_zip(tables, out_path):
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for filename, rows in tables.items():
-            buf = io.StringIO()
-            if rows:
-                fieldnames = list(rows[0].keys())
-                writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n")
-                writer.writeheader()
-                writer.writerows(rows)
-            zf.writestr(filename, buf.getvalue())
+            zf.writestr(filename, _rows_to_csv(rows))
     print(f"Wrote {out_path}")
 
 
-def merge_into_gtfs_zip(fares_tables, existing_gtfs_zip, out_path):
+def write_unzipped_dir(files, out_dir):
+    """Write a {filename: bytes-or-str} mapping as plain files in out_dir,
+    mirroring a GTFS zip's contents unzipped -- easier to diff in source
+    control than a binary zip. Clears out_dir of any existing .txt files
+    first so a file removed from the feed doesn't linger as a stale copy."""
+    os.makedirs(out_dir, exist_ok=True)
+    for name in os.listdir(out_dir):
+        if name.endswith(".txt"):
+            os.remove(os.path.join(out_dir, name))
+    for filename, content in files.items():
+        mode = "wb" if isinstance(content, bytes) else "w"
+        with open(os.path.join(out_dir, filename), mode) as f:
+            f.write(content)
+    print(f"Wrote unzipped GTFS to {out_dir}")
+
+
+def merge_into_gtfs_zip(fares_tables, existing_gtfs_zip, out_path, unzipped_out=None):
     """Convenience: merge these fares tables into an existing schedule GTFS
     zip (e.g. the one produced by spm_gtfs.py) so you end up with one feed."""
     with zipfile.ZipFile(existing_gtfs_zip, "r") as zin:
         existing = {name: zin.read(name) for name in zin.namelist()}
 
-    # Pull the schedule feed's actual service date range out of
-    # calendar_dates.txt so feed_info.txt's feed_start_date/feed_end_date
-    # reflect real dates instead of being left blank.
-    fares_tables = {k: v for k, v in fares_tables.items()}  # shallow copy
-    if "calendar_dates.txt" in existing and fares_tables.get("feed_info.txt"):
-        reader = csv.DictReader(io.StringIO(existing["calendar_dates.txt"].decode("utf-8")))
-        dates = sorted(row["date"] for row in reader)
-        if dates:
-            info_row = dict(fares_tables["feed_info.txt"][0])
-            info_row["feed_start_date"] = dates[0]
-            info_row["feed_end_date"] = dates[-1]
-            fares_tables["feed_info.txt"] = [info_row]
+    merged_files = dict(existing)
+    for filename, rows in fares_tables.items():
+        merged_files[filename] = _rows_to_csv(rows)
 
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zout:
-        for name, data in existing.items():
-            if name == "feed_info.txt":
-                continue  # we'll write a merged one below
+        for name, data in merged_files.items():
             zout.writestr(name, data)
-        for filename, rows in fares_tables.items():
-            buf = io.StringIO()
-            if rows:
-                fieldnames = list(rows[0].keys())
-                writer = csv.DictWriter(buf, fieldnames=fieldnames, lineterminator="\n")
-                writer.writeheader()
-                writer.writerows(rows)
-            zout.writestr(filename, buf.getvalue())
     print(f"Wrote merged feed to {out_path}")
+
+    if unzipped_out:
+        write_unzipped_dir(merged_files, unzipped_out)
 
 
 if __name__ == "__main__":
@@ -230,10 +221,13 @@ if __name__ == "__main__":
                      help="Path to an existing schedule GTFS zip (e.g. from spm_gtfs.py) to merge these tables into")
     ap.add_argument("--merged-out", default="spm_gtfs_with_fares.zip",
                      help="Output path for the merged feed (used with --merge-into)")
+    ap.add_argument("--unzipped-out", default=None,
+                     help="Directory to also write the merged feed's tables to as plain "
+                          "files (unzipped) -- easier to diff in source control")
     args = ap.parse_args()
 
     tables = build_tables()
     write_zip(tables, args.out)
 
     if args.merge_into:
-        merge_into_gtfs_zip(tables, args.merge_into, args.merged_out)
+        merge_into_gtfs_zip(tables, args.merge_into, args.merged_out, unzipped_out=args.unzipped_out)

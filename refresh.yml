@@ -24,7 +24,9 @@ jobs:
         run: python3 spm_gtfs.py --days-ahead 180 --out spm_gtfs.zip
 
       - name: Merge in fares
-        run: python3 spm_fares.py --merge-into spm_gtfs.zip --merged-out spm_gtfs_with_fares.zip
+        run: |
+          python3 spm_fares.py --merge-into spm_gtfs.zip --merged-out spm_gtfs_with_fares.zip \
+            --unzipped-out latest/gtfs
 
       - name: Publish to latest/
         run: |
@@ -35,6 +37,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add latest/spm_gtfs.zip
+          git add latest/spm_gtfs.zip latest/gtfs
           git diff --staged --quiet || git commit -m "Refresh GTFS feed ($(date -u +%Y-%m-%d))"
           git push

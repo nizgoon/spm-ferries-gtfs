@@ -1,0 +1,16 @@
+stop_id,stop_name,stop_lat,stop_lon,location_type,stop_timezone,parent_station
+FOR,Fortune Ferry Terminal,47.07357858,-55.83051862,1,America/St_Johns,
+FOR_120,Fortune Ferry Terminal,47.07357858,-55.83051862,0,America/St_Johns,FOR
+FOR_ENT,Fortune Ferry Terminal,47.07400542,-55.82937992,2,America/St_Johns,FOR
+LAN,Débarcadère de Langlade,46.89787672,-56.30067076,1,,
+LAN_30,Débarcadère de Langlade,46.89787672,-56.30067076,0,,LAN
+LAN_ENT,Débarcadère de Langlade,46.89790803,-56.30103062,2,,LAN
+MIQ,Gare maritime de Miquelon,47.10266015,-56.37532493,1,,
+MIQ_15,Gare maritime de Miquelon,47.10266015,-56.37532493,0,,MIQ
+MIQ_60,Gare maritime de Miquelon,47.10266015,-56.37532493,0,,MIQ
+MIQ_ENT,Gare maritime de Miquelon,47.10091553,-56.37638985,2,,MIQ
+STP,Gare maritime de Saint-Pierre,46.77861277,-56.17149092,1,,
+STP_15,Gare maritime de Saint-Pierre,46.77861277,-56.17149092,0,,STP
+STP_60,Gare maritime de Saint-Pierre,46.77861277,-56.17149092,0,,STP
+STP_ENT_ALL,Gare maritime de Saint-Pierre,46.77869949,-56.1720757,2,,STP
+STP_EXIT_INTL,Gare maritime de Saint-Pierre,46.77869949,-56.1720757,2,,STP
