@@ -1,6 +1,6 @@
 stop_id,stop_name,stop_lat,stop_lon,location_type,stop_timezone,parent_station
 FOR,Fortune Ferry Terminal,47.07357858,-55.83051862,1,America/St_Johns,
-FOR_120,Fortune Ferry Terminal,47.07357858,-55.83051862,0,America/St_Johns,FOR
+FOR_90,Fortune Ferry Terminal,47.07357858,-55.83051862,0,America/St_Johns,FOR
 FOR_ENT,Fortune Ferry Terminal,47.07400542,-55.82937992,2,America/St_Johns,FOR
 LAN,Débarcadère de Langlade,46.89787672,-56.30067076,1,,
 LAN_30,Débarcadère de Langlade,46.89787672,-56.30067076,0,,LAN

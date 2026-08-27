@@ -152,7 +152,7 @@ BOOKING_RULES_ROWS = [
 # that respects pathways.txt's traversal_time has to route the rider through
 # the entrance and its pathway to the specific platform for their sailing,
 # which forces it to surface the true lead time (e.g. Fortune's Canadian
-# customs control needs 2h, so FOR_120 riders show up 120 min early) instead
+# customs control needs 1.5h, so FOR_90 riders show up 120 min early) instead
 # of the walk/wait time it would otherwise assume.
 #
 # Which platform a sailing boards from depends on BOTH its origin and
@@ -162,20 +162,20 @@ BOOKING_RULES_ROWS = [
 # ---------------------------------------------------------------------------
 
 OD_BOARDING_STOPS = {
-    ("FOR", "STP"): ("FOR_120", "STP_60"),
-    ("FOR", "MIQ"): ("FOR_120", "MIQ_60"),
+    ("FOR", "STP"): ("FOR_90", "STP_60"),
+    ("FOR", "MIQ"): ("FOR_90", "MIQ_60"),
     ("LAN", "STP"): ("LAN_30", "STP_15"),
     ("MIQ", "STP"): ("MIQ_15", "STP_15"),
-    ("MIQ", "FOR"): ("MIQ_60", "FOR_120"),
+    ("MIQ", "FOR"): ("MIQ_60", "FOR_90"),
     ("STP", "MIQ"): ("STP_15", "MIQ_15"),
     ("STP", "LAN"): ("STP_15", "LAN_30"),
-    ("STP", "FOR"): ("STP_60", "FOR_120"),
+    ("STP", "FOR"): ("STP_60", "FOR_90"),
 }
 
 STOPS_ROWS = [
     {"stop_id": "FOR", "stop_name": "Fortune Ferry Terminal", "stop_lat": 47.07357858, "stop_lon": -55.83051862,
      "location_type": 1, "stop_timezone": "America/St_Johns", "parent_station": ""},
-    {"stop_id": "FOR_120", "stop_name": "Fortune Ferry Terminal", "stop_lat": 47.07357858, "stop_lon": -55.83051862,
+    {"stop_id": "FOR_90", "stop_name": "Fortune Ferry Terminal", "stop_lat": 47.07357858, "stop_lon": -55.83051862,
      "location_type": 0, "stop_timezone": "America/St_Johns", "parent_station": "FOR"},
     {"stop_id": "FOR_ENT", "stop_name": "Fortune Ferry Terminal", "stop_lat": 47.07400542, "stop_lon": -55.82937992,
      "location_type": 2, "stop_timezone": "America/St_Johns", "parent_station": "FOR"},
@@ -212,9 +212,9 @@ _PATHWAYS_COLUMNS = [
 PATHWAYS_ROWS = [
     {col: row.get(col, "") for col in _PATHWAYS_COLUMNS}
     for row in [
-        {"pathway_id": "PW_FOR_ENT-FOR_120", "from_stop_id": "FOR_ENT", "to_stop_id": "FOR_120",
-         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 7200, "signposted_as": "Contrôle et embarquement"},
-        {"pathway_id": "PW_FOR_120-FOR_ENT", "from_stop_id": "FOR_120", "to_stop_id": "FOR_ENT",
+        {"pathway_id": "PW_FOR_ENT-FOR_90", "from_stop_id": "FOR_ENT", "to_stop_id": "FOR_90",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 5400, "signposted_as": "Contrôle et embarquement"},
+        {"pathway_id": "PW_FOR_90-FOR_ENT", "from_stop_id": "FOR_90", "to_stop_id": "FOR_ENT",
          "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 3600, "signposted_as": "Sortie via douane canadienne"},
         {"pathway_id": "PW_LAN_ENT-LAN_30", "from_stop_id": "LAN_ENT", "to_stop_id": "LAN_30",
          "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 1800, "signposted_as": "Embarquement via Jeune France"},
@@ -421,7 +421,7 @@ def build_gtfs(legs, feed_start, feed_end):
 
     skipped = 0
     skipped_od = 0
-    for i, leg in enumerate(legs):
+    for leg in legs:
         from_id = NAME_TO_STOP_ID.get(leg["from_name"])
         to_id = NAME_TO_STOP_ID.get(leg["to_name"])
         if not from_id or not to_id:
@@ -457,7 +457,7 @@ def build_gtfs(legs, feed_start, feed_end):
         service_id = dep_dt.strftime("%Y%m%d")
         service_dates.add(service_id)
 
-        trip_id = f"{from_id}-{to_id}_{dep_dt.strftime('%Y%m%dT%H%M')}_{i}"
+        trip_id = f"{from_id}-{to_id}_{dep_dt.strftime('%Y%m%dT%H%M')}"
         trips_rows.append({
             "route_id": route_id,
             "service_id": service_id,
@@ -497,6 +497,16 @@ def build_gtfs(legs, feed_start, feed_end):
             "pickup_type": 1,
             "pickup_booking_rule_id": "",
         })
+
+    seen_trip_ids = set()
+    duplicate_trip_ids = set()
+    for row in trips_rows:
+        tid = row["trip_id"]
+        if tid in seen_trip_ids:
+            duplicate_trip_ids.add(tid)
+        seen_trip_ids.add(tid)
+    if duplicate_trip_ids:
+        raise RuntimeError(f"Duplicate trip_id(s) found: {sorted(duplicate_trip_ids)}")
 
     calendar_dates_rows = [
         {"service_id": d, "date": d, "exception_type": 1}
