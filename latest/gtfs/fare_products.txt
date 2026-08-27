@@ -1,0 +1,25 @@
+fare_product_id,fare_product_name,rider_category_id,amount,currency
+STP_MIQ_adult_OW,Saint-Pierre – Miquelon aller simple (Adulte),adult,16.00,EUR
+STP_MIQ_adult_RT,Saint-Pierre – Miquelon aller-retour (Adulte),adult,24.00,EUR
+STP_MIQ_reduit_1_OW,Saint-Pierre – Miquelon aller simple (Tarif réduit 1),reduit_1,10.00,EUR
+STP_MIQ_reduit_1_RT,Saint-Pierre – Miquelon aller-retour (Tarif réduit 1),reduit_1,13.00,EUR
+STP_LAN_adult_OW,Saint-Pierre – Langlade aller simple (Adulte),adult,10.00,EUR
+STP_LAN_adult_RT,Saint-Pierre – Langlade aller-retour (Adulte),adult,17.00,EUR
+STP_LAN_reduit_1_OW,Saint-Pierre – Langlade aller simple (Tarif réduit 1),reduit_1,5.00,EUR
+STP_LAN_reduit_1_RT,Saint-Pierre – Langlade aller-retour (Tarif réduit 1),reduit_1,8.00,EUR
+STP_FOR_adult_OW,Saint-Pierre – Fortune aller simple (Adulte),adult,45.00,EUR
+STP_FOR_adult_RT,Saint-Pierre – Fortune aller-retour (Adulte),adult,73.00,EUR
+STP_FOR_reduit_2_OW,Saint-Pierre – Fortune aller simple (Tarif réduit 2),reduit_2,35.00,EUR
+STP_FOR_reduit_2_RT,Saint-Pierre – Fortune aller-retour (Tarif réduit 2),reduit_2,49.00,EUR
+STP_FOR_reduit_3_OW,Saint-Pierre – Fortune aller simple (Tarif réduit 3),reduit_3,35.00,EUR
+STP_FOR_reduit_3_RT,Saint-Pierre – Fortune aller-retour (Tarif réduit 3),reduit_3,49.00,EUR
+STP_FOR_reduit_4_OW,Saint-Pierre – Fortune aller simple (Tarif réduit 4),reduit_4,40.00,EUR
+STP_FOR_reduit_4_RT,Saint-Pierre – Fortune aller-retour (Tarif réduit 4),reduit_4,68.00,EUR
+MIQ_FOR_adult_OW,Miquelon – Fortune aller simple (Adulte),adult,45.00,EUR
+MIQ_FOR_adult_RT,Miquelon – Fortune aller-retour (Adulte),adult,73.00,EUR
+MIQ_FOR_reduit_2_OW,Miquelon – Fortune aller simple (Tarif réduit 2),reduit_2,35.00,EUR
+MIQ_FOR_reduit_2_RT,Miquelon – Fortune aller-retour (Tarif réduit 2),reduit_2,49.00,EUR
+MIQ_FOR_reduit_3_OW,Miquelon – Fortune aller simple (Tarif réduit 3),reduit_3,35.00,EUR
+MIQ_FOR_reduit_3_RT,Miquelon – Fortune aller-retour (Tarif réduit 3),reduit_3,49.00,EUR
+MIQ_FOR_reduit_4_OW,Miquelon – Fortune aller simple (Tarif réduit 4),reduit_4,40.00,EUR
+MIQ_FOR_reduit_4_RT,Miquelon – Fortune aller-retour (Tarif réduit 4),reduit_4,68.00,EUR

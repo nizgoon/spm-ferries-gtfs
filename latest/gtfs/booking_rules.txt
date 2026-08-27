@@ -1,0 +1,3 @@
+booking_rule_id,booking_type,prior_notice_duration_min,prior_notice_last_day,prior_notice_last_time,pickup_message,booking_url
+BR_FOR_AV09H00_16HVEILLE,2,,1,16:30:00,"La réservation est obligatoire. Pour les départs de Fortune avant 9h00, la réservation doit être effectuée avant 16h00 la veille.",https://www.spm-ferries.fr/achetez-votre-billet/billetterie-en-ligne/
+BR_1H_AVANT_DEPART,1,60,,,"La réservation est obligatoire. Pour ce départ, la réservation en ligne doit être effectuée au moins 1 heure avant le départ.",https://www.spm-ferries.fr/achetez-votre-billet/billetterie-en-ligne/

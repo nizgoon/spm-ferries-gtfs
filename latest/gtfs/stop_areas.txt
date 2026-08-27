@@ -1,0 +1,5 @@
+stop_id,area_id
+STP,STP
+MIQ,MIQ
+FOR,FOR
+LAN,LAN

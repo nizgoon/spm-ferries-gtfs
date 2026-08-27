@@ -1,0 +1,13 @@
+pathway_id,from_stop_id,to_stop_id,pathway_mode,is_bidirectional,traversal_time,signposted_as
+PW_FOR_ENT-FOR_120,FOR_ENT,FOR_120,1,0,7200,Contrôle et embarquement
+PW_FOR_120-FOR_ENT,FOR_120,FOR_ENT,1,0,3600,Sortie via douane canadienne
+PW_LAN_ENT-LAN_30,LAN_ENT,LAN_30,1,0,1800,Embarquement via Jeune France
+PW_LAN_30-LAN_ENT,LAN_30,LAN_ENT,1,0,,Sortie
+PW_MIQ_ENT-MIQ_15,MIQ_ENT,MIQ_15,1,0,900,Embarquement
+PW_MIQ_ENT-MIQ_60,MIQ_ENT,MIQ_60,1,0,3600,Contrôle et embarquement
+PW_MIQ_15-MIQ_ENT,MIQ_15,MIQ_ENT,1,0,,Sortie
+PW_MIQ_60-MIQ_ENT,MIQ_60,MIQ_ENT,1,0,900,Sortie via douane française
+PW_STP_ENT_ALL-STP_60,STP_ENT_ALL,STP_60,1,0,3600,Contrôle et embarquement
+PW_STP_ENT_ALL-STP_15,STP_ENT_ALL,STP_15,1,0,900,Embarquement
+PW_STP_60-STP_EXIT_INTL,STP_60,STP_EXIT_INTL,1,0,1800,Sortie via douane française
+PW_STP_15-STP_ENT_ALL,STP_15,STP_ENT_ALL,1,0,,Sortie

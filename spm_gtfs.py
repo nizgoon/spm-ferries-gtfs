@@ -50,7 +50,7 @@ import sys
 import urllib.error
 import urllib.request
 import zipfile
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 WIDGET_URL = "https://horaires.spm-ferries.fr/afficheur-web.php?cie=SPM&langue=en_EN&ver=4445546"
@@ -80,13 +80,13 @@ USER_AGENT = "Mozilla/5.0 (compatible; spm-gtfs-scraper/1.0)"
 # time correctly instead of assuming everything is in agency_timezone.
 PORTS = {
     1: {"name": "SAINT PIERRE", "stop_id": "STP", "stop_name": "Gare maritime de Saint-Pierre",
-        "lat": 46.7778, "lon": -56.1719, "stop_timezone": None},
+        "lat": 46.778612767967154, "lon": -56.17149092325049, "stop_timezone": None},
     2: {"name": "MIQUELON", "stop_id": "MIQ", "stop_name": "Gare maritime de Miquelon",
-        "lat": 47.0958, "lon": -56.3789, "stop_timezone": None},
+        "lat": 47.1026601518199, "lon":  -56.375324928010784, "stop_timezone": None},
     3: {"name": "FORTUNE", "stop_id": "FOR", "stop_name": "Fortune Ferry Terminal",
-        "lat": 47.0736, "lon": -55.8330, "stop_timezone": "America/St_Johns"},
+        "lat": 47.073578583687706, "lon": -55.83051862309114, "stop_timezone": "America/St_Johns"},
     4: {"name": "LANGLADE", "stop_id": "LAN", "stop_name": "Débarcadère de Langlade",
-        "lat": 46.9500, "lon": -56.2900, "stop_timezone": None},
+        "lat": 46.89787671605952, "lon": -56.300670760277356, "stop_timezone": None},
 }
 
 # Proper French display form of each raw API place name, used for
@@ -103,6 +103,141 @@ NAME_TO_STOP_ID = {p["name"]: p["stop_id"] for p in PORTS.values()}
 STOP_ID_TO_TIMEZONE = {p["stop_id"]: (p["stop_timezone"] or "America/Miquelon") for p in PORTS.values()}
 
 TIMEZONE = "America/Miquelon"
+
+# Booking rules. Fortune departures before 9:00 AM (Fortune/America/St_Johns
+# local time) require booking by 16:00 the day before -- ALSO in Fortune
+# time -- which booking_rules.txt's prior_notice_last_time must express in
+# agency_timezone (America/Miquelon), so we convert it here rather than
+# hardcoding a value that would silently go stale if the 30-minute
+# Miquelon/Newfoundland offset ever changed.
+FORTUNE_EARLY_CUTOFF = time(9, 0, 0)
+_FOR_16H_MIQUELON = datetime(2026, 1, 1, 16, 0, 0).replace(
+    tzinfo=ZoneInfo(PORTS[3]["stop_timezone"])).astimezone(ZoneInfo(TIMEZONE))
+BR_FORTUNE_EARLY = "BR_FOR_AV09H00_16HVEILLE"
+BR_STANDARD = "BR_1H_AVANT_DEPART"
+
+_BOOKING_RULES_COLUMNS = [
+    "booking_rule_id", "booking_type", "prior_notice_duration_min",
+    "prior_notice_last_day", "prior_notice_last_time", "pickup_message", "booking_url",
+]
+BOOKING_RULES_ROWS = [
+    {col: row.get(col, "") for col in _BOOKING_RULES_COLUMNS}
+    for row in [
+        {
+            "booking_rule_id": BR_FORTUNE_EARLY,
+            "booking_type": 2,
+            "prior_notice_last_day": 1,
+            "prior_notice_last_time": _FOR_16H_MIQUELON.strftime("%H:%M:%S"),
+            "pickup_message": "La réservation est obligatoire. Pour les départs de Fortune avant "
+                               "9h00, la réservation doit être effectuée avant 16h00 la veille.",
+            "booking_url": "https://www.spm-ferries.fr/achetez-votre-billet/billetterie-en-ligne/",
+        },
+        {
+            "booking_rule_id": BR_STANDARD,
+            "booking_type": 1,
+            "prior_notice_duration_min": 60,
+            "pickup_message": "La réservation est obligatoire. Pour ce départ, la réservation en "
+                               "ligne doit être effectuée au moins 1 heure avant le départ.",
+            "booking_url": "https://www.spm-ferries.fr/achetez-votre-billet/billetterie-en-ligne/",
+        },
+    ]
+]
+
+# ---------------------------------------------------------------------------
+# stops.txt / pathways.txt
+#
+# Each port's top-level station (location_type=1) has separate boarding
+# platforms (location_type=0) per how long before departure that sailing's
+# gate opens, plus one or more entrances (location_type=2). A trip planner
+# that respects pathways.txt's traversal_time has to route the rider through
+# the entrance and its pathway to the specific platform for their sailing,
+# which forces it to surface the true lead time (e.g. Fortune's Canadian
+# customs control needs 2h, so FOR_120 riders show up 120 min early) instead
+# of the walk/wait time it would otherwise assume.
+#
+# Which platform a sailing boards from depends on BOTH its origin and
+# destination (e.g. STP->FOR boards from STP_60, but STP->MIQ boards from
+# STP_15) -- so this is keyed on the (origin, destination) port_id pair,
+# not just the origin.
+# ---------------------------------------------------------------------------
+
+OD_BOARDING_STOPS = {
+    ("FOR", "STP"): ("FOR_120", "STP_60"),
+    ("FOR", "MIQ"): ("FOR_120", "MIQ_60"),
+    ("LAN", "STP"): ("LAN_30", "STP_15"),
+    ("MIQ", "STP"): ("MIQ_15", "STP_15"),
+    ("MIQ", "FOR"): ("MIQ_60", "FOR_120"),
+    ("STP", "MIQ"): ("STP_15", "MIQ_15"),
+    ("STP", "LAN"): ("STP_15", "LAN_30"),
+    ("STP", "FOR"): ("STP_60", "FOR_120"),
+}
+
+STOPS_ROWS = [
+    {"stop_id": "FOR", "stop_name": "Fortune Ferry Terminal", "stop_lat": 47.07357858, "stop_lon": -55.83051862,
+     "location_type": 1, "stop_timezone": "America/St_Johns", "parent_station": ""},
+    {"stop_id": "FOR_120", "stop_name": "Fortune Ferry Terminal", "stop_lat": 47.07357858, "stop_lon": -55.83051862,
+     "location_type": 0, "stop_timezone": "America/St_Johns", "parent_station": "FOR"},
+    {"stop_id": "FOR_ENT", "stop_name": "Fortune Ferry Terminal", "stop_lat": 47.07400542, "stop_lon": -55.82937992,
+     "location_type": 2, "stop_timezone": "America/St_Johns", "parent_station": "FOR"},
+    {"stop_id": "LAN", "stop_name": "Débarcadère de Langlade", "stop_lat": 46.89787672, "stop_lon": -56.30067076,
+     "location_type": 1, "stop_timezone": "", "parent_station": ""},
+    {"stop_id": "LAN_30", "stop_name": "Débarcadère de Langlade", "stop_lat": 46.89787672, "stop_lon": -56.30067076,
+     "location_type": 0, "stop_timezone": "", "parent_station": "LAN"},
+    {"stop_id": "LAN_ENT", "stop_name": "Débarcadère de Langlade", "stop_lat": 46.89790803, "stop_lon": -56.30103062,
+     "location_type": 2, "stop_timezone": "", "parent_station": "LAN"},
+    {"stop_id": "MIQ", "stop_name": "Gare maritime de Miquelon", "stop_lat": 47.10266015, "stop_lon": -56.37532493,
+     "location_type": 1, "stop_timezone": "", "parent_station": ""},
+    {"stop_id": "MIQ_15", "stop_name": "Gare maritime de Miquelon", "stop_lat": 47.10266015, "stop_lon": -56.37532493,
+     "location_type": 0, "stop_timezone": "", "parent_station": "MIQ"},
+    {"stop_id": "MIQ_60", "stop_name": "Gare maritime de Miquelon", "stop_lat": 47.10266015, "stop_lon": -56.37532493,
+     "location_type": 0, "stop_timezone": "", "parent_station": "MIQ"},
+    {"stop_id": "MIQ_ENT", "stop_name": "Gare maritime de Miquelon", "stop_lat": 47.10091553, "stop_lon": -56.37638985,
+     "location_type": 2, "stop_timezone": "", "parent_station": "MIQ"},
+    {"stop_id": "STP", "stop_name": "Gare maritime de Saint-Pierre", "stop_lat": 46.77861277, "stop_lon": -56.17149092,
+     "location_type": 1, "stop_timezone": "", "parent_station": ""},
+    {"stop_id": "STP_15", "stop_name": "Gare maritime de Saint-Pierre", "stop_lat": 46.77861277, "stop_lon": -56.17149092,
+     "location_type": 0, "stop_timezone": "", "parent_station": "STP"},
+    {"stop_id": "STP_60", "stop_name": "Gare maritime de Saint-Pierre", "stop_lat": 46.77861277, "stop_lon": -56.17149092,
+     "location_type": 0, "stop_timezone": "", "parent_station": "STP"},
+    {"stop_id": "STP_ENT_ALL", "stop_name": "Gare maritime de Saint-Pierre", "stop_lat": 46.77869949, "stop_lon": -56.1720757,
+     "location_type": 2, "stop_timezone": "", "parent_station": "STP"},
+    {"stop_id": "STP_EXIT_INTL", "stop_name": "Gare maritime de Saint-Pierre", "stop_lat": 46.77869949, "stop_lon": -56.1720757,
+     "location_type": 2, "stop_timezone": "", "parent_station": "STP"},
+]
+
+_PATHWAYS_COLUMNS = [
+    "pathway_id", "from_stop_id", "to_stop_id", "pathway_mode",
+    "is_bidirectional", "traversal_time", "signposted_as",
+]
+PATHWAYS_ROWS = [
+    {col: row.get(col, "") for col in _PATHWAYS_COLUMNS}
+    for row in [
+        {"pathway_id": "PW_FOR_ENT-FOR_120", "from_stop_id": "FOR_ENT", "to_stop_id": "FOR_120",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 7200, "signposted_as": "Contrôle et embarquement"},
+        {"pathway_id": "PW_FOR_120-FOR_ENT", "from_stop_id": "FOR_120", "to_stop_id": "FOR_ENT",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 3600, "signposted_as": "Sortie via douane canadienne"},
+        {"pathway_id": "PW_LAN_ENT-LAN_30", "from_stop_id": "LAN_ENT", "to_stop_id": "LAN_30",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 1800, "signposted_as": "Embarquement via Jeune France"},
+        {"pathway_id": "PW_LAN_30-LAN_ENT", "from_stop_id": "LAN_30", "to_stop_id": "LAN_ENT",
+         "pathway_mode": 1, "is_bidirectional": 0, "signposted_as": "Sortie"},
+        {"pathway_id": "PW_MIQ_ENT-MIQ_15", "from_stop_id": "MIQ_ENT", "to_stop_id": "MIQ_15",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 900, "signposted_as": "Embarquement"},
+        {"pathway_id": "PW_MIQ_ENT-MIQ_60", "from_stop_id": "MIQ_ENT", "to_stop_id": "MIQ_60",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 3600, "signposted_as": "Contrôle et embarquement"},
+        {"pathway_id": "PW_MIQ_15-MIQ_ENT", "from_stop_id": "MIQ_15", "to_stop_id": "MIQ_ENT",
+         "pathway_mode": 1, "is_bidirectional": 0, "signposted_as": "Sortie"},
+        {"pathway_id": "PW_MIQ_60-MIQ_ENT", "from_stop_id": "MIQ_60", "to_stop_id": "MIQ_ENT",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 900, "signposted_as": "Sortie via douane française"},
+        {"pathway_id": "PW_STP_ENT_ALL-STP_60", "from_stop_id": "STP_ENT_ALL", "to_stop_id": "STP_60",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 3600, "signposted_as": "Contrôle et embarquement"},
+        {"pathway_id": "PW_STP_ENT_ALL-STP_15", "from_stop_id": "STP_ENT_ALL", "to_stop_id": "STP_15",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 900, "signposted_as": "Embarquement"},
+        {"pathway_id": "PW_STP_60-STP_EXIT_INTL", "from_stop_id": "STP_60", "to_stop_id": "STP_EXIT_INTL",
+         "pathway_mode": 1, "is_bidirectional": 0, "traversal_time": 1800, "signposted_as": "Sortie via douane française"},
+        {"pathway_id": "PW_STP_15-STP_ENT_ALL", "from_stop_id": "STP_15", "to_stop_id": "STP_ENT_ALL",
+         "pathway_mode": 1, "is_bidirectional": 0, "signposted_as": "Sortie"},
+    ]
+]
 
 
 def sanity_check_legs(legs, min_minutes=5, max_minutes=360, verbose=True):
@@ -279,27 +414,25 @@ def build_gtfs(legs, feed_start, feed_end):
         "agency_lang": "fr",
     }]
 
-    stops_rows = [{
-        "stop_id": p["stop_id"],
-        "stop_name": p["stop_name"],
-        "stop_lat": p["lat"],
-        "stop_lon": p["lon"],
-        "location_type": 0,
-        "stop_timezone": p["stop_timezone"] or "",
-    } for p in PORTS.values()]
-
     routes = {}       # route_id -> row
     trips_rows = []
     stop_times_rows = []
     service_dates = set()  # set of YYYYMMDD strings actually used
 
     skipped = 0
+    skipped_od = 0
     for i, leg in enumerate(legs):
         from_id = NAME_TO_STOP_ID.get(leg["from_name"])
         to_id = NAME_TO_STOP_ID.get(leg["to_name"])
         if not from_id or not to_id:
             skipped += 1
             continue
+
+        boarding_stops = OD_BOARDING_STOPS.get((from_id, to_id))
+        if not boarding_stops:
+            skipped_od += 1
+            continue
+        board_stop_id, alight_stop_id = boarding_stops
 
         # Undirected route: STP<->MIQ is one route regardless of which way
         # it's sailing; direction_id (0/1) captures the direction. The
@@ -330,17 +463,23 @@ def build_gtfs(legs, feed_start, feed_end):
             "service_id": service_id,
             "trip_id": trip_id,
             "direction_id": direction_id,
-            "trip_short_name": leg["cruise_code"],
             "trip_headsign": DISPLAY_NAME.get(leg["to_name"], leg["to_name"]),
             "bikes_allowed": 1,  # SPM Ferries carries bikes (see tariff page bike fares)
         })
+
+        if from_id == "FOR" and dep_dt.time() < FORTUNE_EARLY_CUTOFF:
+            booking_rule_id = BR_FORTUNE_EARLY
+        else:
+            booking_rule_id = BR_STANDARD
 
         stop_times_rows.append({
             "trip_id": trip_id,
             "arrival_time": dep_dt.strftime("%H:%M:%S"),
             "departure_time": dep_dt.strftime("%H:%M:%S"),
-            "stop_id": from_id,
+            "stop_id": board_stop_id,
             "stop_sequence": 1,
+            "pickup_type": 2,
+            "pickup_booking_rule_id": booking_rule_id,
         })
         # if departure and arrival cross midnight, GTFS wants arrival_time
         # to keep counting past 24:00:00 rather than wrapping to 00:xx
@@ -353,8 +492,10 @@ def build_gtfs(legs, feed_start, feed_end):
             "trip_id": trip_id,
             "arrival_time": arr_hms,
             "departure_time": arr_hms,
-            "stop_id": to_id,
+            "stop_id": alight_stop_id,
             "stop_sequence": 2,
+            "pickup_type": 1,
+            "pickup_booking_rule_id": "",
         })
 
     calendar_dates_rows = [
@@ -363,25 +504,31 @@ def build_gtfs(legs, feed_start, feed_end):
     ]
 
     feed_info_rows = [{
-        "feed_publisher_name": "SPM Ferries (unofficial scrape)",
-        "feed_publisher_url": "https://www.spm-ferries.fr",
+        "feed_publisher_name": "Transit app (Derek LEE & Brody FLANNIGAN)",
+        "feed_publisher_url": "https://transit.app",
         "feed_lang": "fr",
         "feed_start_date": feed_start.replace("-", ""),
         "feed_end_date": feed_end.replace("-", ""),
         "feed_contact_email": "derek@transit.app",
+        "feed_version": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
     }]
 
     if skipped:
         print(f"Warning: skipped {skipped} leg(s) with unrecognized port names", file=sys.stderr)
+    if skipped_od:
+        print(f"Warning: skipped {skipped_od} leg(s) with no OD_BOARDING_STOPS entry "
+              f"for their origin/destination pair", file=sys.stderr)
 
     return {
         "agency.txt": agency_rows,
-        "stops.txt": stops_rows,
+        "stops.txt": STOPS_ROWS,
         "routes.txt": list(routes.values()),
         "trips.txt": trips_rows,
         "stop_times.txt": stop_times_rows,
         "calendar_dates.txt": calendar_dates_rows,
         "feed_info.txt": feed_info_rows,
+        "booking_rules.txt": BOOKING_RULES_ROWS,
+        "pathways.txt": PATHWAYS_ROWS,
     }
 
 

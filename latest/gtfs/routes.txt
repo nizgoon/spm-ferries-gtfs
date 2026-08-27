@@ -1,0 +1,5 @@
+route_id,agency_id,route_short_name,route_long_name,route_type
+LAN-STP,SPM,LAN-STP,Langlade - Saint-Pierre,4
+MIQ-STP,SPM,MIQ-STP,Miquelon - Saint-Pierre,4
+FOR-STP,SPM,FOR-STP,Fortune - Saint-Pierre,4
+FOR-MIQ,SPM,FOR-MIQ,Fortune - Miquelon,4

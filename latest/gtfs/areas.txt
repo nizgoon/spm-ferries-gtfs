@@ -1,0 +1,5 @@
+area_id,area_name
+STP,Saint-Pierre
+MIQ,Miquelon
+FOR,Fortune
+LAN,Langlade
