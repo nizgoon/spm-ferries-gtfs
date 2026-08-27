@@ -463,7 +463,6 @@ def build_gtfs(legs, feed_start, feed_end):
             "service_id": service_id,
             "trip_id": trip_id,
             "direction_id": direction_id,
-            "trip_short_name": leg["cruise_code"],
             "trip_headsign": DISPLAY_NAME.get(leg["to_name"], leg["to_name"]),
             "bikes_allowed": 1,  # SPM Ferries carries bikes (see tariff page bike fares)
         })
