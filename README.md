@@ -48,20 +48,30 @@ prices directly with SPM Ferries before travel.**
   `MODIFS PAYANTES`, a sentinel capacity of 10,000 seats) that aren't real sailings. `spm_gtfs.py`
   filters these out before building the feed.
 - **Bikes are carried** on all SPM Ferries sailings, so every trip sets `bikes_allowed: 1`.
-- `feed_info.txt`'s `feed_start_date`/`feed_end_date` are derived automatically from the actual
-  min/max dates in `calendar_dates.txt` at merge time — not hardcoded — so they stay accurate as the
-  published schedule window rolls forward each week. `feed_version` is stamped with the UTC timestamp
-  of the generation run, so consumers can tell which weekly refresh they're looking at.
-- Every sailing requires a reservation, so `stop_times.txt` sets `pickup_type: 1` (no boarding without
-  booking) with a `booking_rules.txt` reference. Most sailings require booking at least 1 hour ahead;
-  Fortune departures before 9:00 AM require booking by 16:00 the day before, which `spm_gtfs.py`
-  converts from Fortune (`America/St_Johns`) into `agency_timezone` (`America/Miquelon`) via `zoneinfo`
-  rather than hardcoding a fixed offset, so it stays correct if the 30-minute gap ever changes.
+- `feed_info.txt`'s `feed_start_date`/`feed_end_date` are derived automatically by `spm_gtfs.py` from
+  the actual min/max dates in `calendar_dates.txt` — not from the requested `--days-ahead` window,
+  which is often longer than what's actually published — so they stay accurate as the schedule window
+  rolls forward each week. `feed_version` is stamped with the UTC timestamp of the generation run, so
+  consumers can tell which weekly refresh they're looking at. `spm_fares.py` no longer writes its own
+  `feed_info.txt`; the schedule feed is the single source of truth for it.
+- `spm_fares.py`'s `stop_areas.txt` (which fare pricing keys off) is derived directly from
+  `spm_gtfs.py`'s `STOPS_ROWS` rather than hardcoded, since the station hierarchy above means the
+  stops actually referenced in `stop_times.txt` are boarding platforms (`STP_15`, `FOR_90`, etc.), not
+  the 4 parent ports. A hardcoded mapping silently breaks fare resolution for every trip if that
+  hierarchy ever changes; this keeps the two in sync automatically.
+- English translations for `stop_name`, `rider_category_name`, and `fare_product_name` are provided
+  via `translations.txt` (`language: en`), alongside the French primary content.
+- Every sailing requires a reservation, so `stop_times.txt` sets the boarding stop's `pickup_type: 2`
+  (coordinate via the referenced `booking_rules.txt` rule) rather than the default `0`. Most sailings
+  require booking at least 1 hour ahead; Fortune departures before 9:00 AM require booking by 16:00
+  the day before (Fortune local time), which `spm_gtfs.py` converts into `agency_timezone`
+  (`America/Miquelon`) via `zoneinfo` rather than hardcoding a fixed offset, so it stays correct if the
+  30-minute gap ever changes.
 - Each port's station in `stops.txt` is split into boarding platforms (`location_type: 0`) and
   entrances (`location_type: 2`) connected by `pathways.txt`, with `traversal_time` set to the real
-  lead time a rider needs — e.g. Fortune's Canadian customs control needs 2 hours, so a Fortune-bound
-  sailing's platform is 2 hours' pathway-walk from its entrance. This lets a pathways-aware trip
-  planner surface the true show-up time instead of assuming an ordinary walk/wait.
+  lead time a rider needs — e.g. boarding a sailing departing Fortune means clearing Canadian customs
+  first, so that entrance→platform pathway is 1.5 hours, not an ordinary walk. This lets a
+  pathways-aware trip planner surface the true show-up time instead of assuming an ordinary walk/wait.
 - The feed has been validated with [MobilityData's canonical `gtfs-validator`](https://github.com/MobilityData/gtfs-validator)
   with **zero errors and zero warnings**, except one left in deliberately:
   `mixed_case_recommended_field` on `route_short_name` (e.g. `STP-MIQ`). These are short, all-caps

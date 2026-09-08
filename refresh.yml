@@ -25,6 +25,7 @@ jobs:
 
       - name: Merge in fares
         run: |
+          mkdir -p latest/gtfs
           python3 spm_fares.py --merge-into spm_gtfs.zip --merged-out spm_gtfs_with_fares.zip \
             --unzipped-out latest/gtfs
 
@@ -37,6 +38,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add latest/spm_gtfs.zip latest/gtfs
+          git add latest/spm_gtfs.zip latest/gtfs/
           git diff --staged --quiet || git commit -m "Refresh GTFS feed ($(date -u +%Y-%m-%d))"
           git push
