@@ -513,12 +513,22 @@ def build_gtfs(legs, feed_start, feed_end):
         for d in sorted(service_dates)
     ]
 
+    # Use the actual min/max dates that ended up in calendar_dates_rows,
+    # not the requested feed_start/feed_end -- SPM's published schedule
+    # horizon is often shorter than what's requested (e.g. we asked for
+    # 150 days ahead here but only ~4 months are actually published), so
+    # the requested window can overstate how far real service data goes.
+    if service_dates:
+        actual_start, actual_end = min(service_dates), max(service_dates)
+    else:
+        actual_start, actual_end = feed_start.replace("-", ""), feed_end.replace("-", "")
+
     feed_info_rows = [{
         "feed_publisher_name": "Transit app (Derek LEE & Brody FLANNIGAN)",
         "feed_publisher_url": "https://transit.app",
         "feed_lang": "fr",
-        "feed_start_date": feed_start.replace("-", ""),
-        "feed_end_date": feed_end.replace("-", ""),
+        "feed_start_date": actual_start,
+        "feed_end_date": actual_end,
         "feed_contact_email": "derek@transit.app",
         "feed_version": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
     }]
@@ -528,6 +538,27 @@ def build_gtfs(legs, feed_start, feed_end):
     if skipped_od:
         print(f"Warning: skipped {skipped_od} leg(s) with no OD_BOARDING_STOPS entry "
               f"for their origin/destination pair", file=sys.stderr)
+
+    # English translations for stop_name. Using field_value (matching the
+    # exact French text) rather than record_id, since the station model
+    # now has several stop_id rows per port (parent + boarding platforms
+    # + entrances) that all share the same stop_name -- one field_value
+    # row covers all of them instead of needing one row per stop_id.
+    # Fortune's name is already the same in both languages, so it's
+    # skipped. route_long_name/trip_headsign use place names spelled
+    # identically in French and English, so they need no entries either.
+    STOP_NAME_TRANSLATIONS_EN = {
+        "Gare maritime de Saint-Pierre": "Saint-Pierre Ferry Terminal",
+        "Gare maritime de Miquelon": "Miquelon Ferry Terminal",
+        "Débarcadère de Langlade": "Langlade Ferry Landing",
+    }
+    translations_rows = [
+        {
+            "table_name": "stops", "field_name": "stop_name", "language": "en",
+            "translation": name_en, "record_id": "", "record_sub_id": "", "field_value": name_fr,
+        }
+        for name_fr, name_en in STOP_NAME_TRANSLATIONS_EN.items()
+    ]
 
     return {
         "agency.txt": agency_rows,
@@ -539,6 +570,7 @@ def build_gtfs(legs, feed_start, feed_end):
         "feed_info.txt": feed_info_rows,
         "booking_rules.txt": BOOKING_RULES_ROWS,
         "pathways.txt": PATHWAYS_ROWS,
+        "translations.txt": translations_rows,
     }
 
 

@@ -93,6 +93,26 @@ RIDER_SHORT_NAME = {
     "reduit_4": "Tarif réduit 4",
 }
 
+# English translations, referenced by translations.txt below. Only these
+# two tables/fields actually differ between languages -- route_long_name
+# and trip_headsign (in spm_gtfs.py) use place names spelled identically
+# in French and English, so they need no translation entries.
+RIDER_CATEGORIES_EN = {
+    "adult":    "Adult",
+    "reduit_1": "Reduced 1 (child 2-11, person with disability, 60 and over) "
+                "— Saint-Pierre/Miquelon and Saint-Pierre/Langlade routes",
+    "reduit_2": "Reduced 2 (child 2-11) — Fortune route",
+    "reduit_3": "Reduced 3 (person with disability) — Fortune route",
+    "reduit_4": "Reduced 4 (60 and over) — Fortune route",
+}
+RIDER_SHORT_NAME_EN = {
+    "adult": "Adult",
+    "reduit_1": "Reduced 1",
+    "reduit_2": "Reduced 2",
+    "reduit_3": "Reduced 3",
+    "reduit_4": "Reduced 4",
+}
+
 # Full French place names, used for fare_product_name. Fortune stays in
 # English (see spm_gtfs.py's DISPLAY_NAME / stop_name for the same
 # reasoning): it's an anglophone Newfoundland town, and "Fortune" is
@@ -103,8 +123,22 @@ AREAS = {
     "FOR": "Fortune",
     "LAN": "Langlade",
 }
-# 1:1 mapping onto the stop_ids used in spm_gtfs.py's stops.txt
-STOP_TO_AREA = {"STP": "STP", "MIQ": "MIQ", "FOR": "FOR", "LAN": "LAN"}
+# Derived from spm_gtfs.py's STOPS_ROWS rather than hardcoded: that module
+# models each port as a parent station (location_type=1) with separate
+# boarding-platform child stops (location_type=0, e.g. STP_15/STP_60) that
+# stop_times.txt actually boards/alights riders at. A hardcoded 4-entry
+# {"STP": "STP", ...} map would silently break fare resolution for every
+# real trip, since none of those platform-level stop_ids would ever
+# appear in stop_areas.txt. Deriving this from the live stop hierarchy
+# means it can't drift out of sync again if the station model changes.
+from spm_gtfs import STOPS_ROWS
+
+STOP_TO_AREA = {}
+for _row in STOPS_ROWS:
+    if _row["location_type"] == 1:
+        STOP_TO_AREA[_row["stop_id"]] = _row["stop_id"]  # parent station is its own area
+    elif _row.get("parent_station"):
+        STOP_TO_AREA[_row["stop_id"]] = _row["parent_station"]
 
 
 def build_tables():
@@ -119,11 +153,19 @@ def build_tables():
 
     fare_products_rows = []
     fare_leg_rules_rows = []
+    translations_rows = [
+        {
+            "table_name": "rider_categories", "field_name": "rider_category_name", "language": "en",
+            "translation": name_en, "record_id": rid, "record_sub_id": "", "field_value": "",
+        }
+        for rid, name_en in RIDER_CATEGORIES_EN.items()
+    ]
 
     for route_group, area_a, area_b, rider_id, one_way, return_fare in FARES:
         ow_id = f"{route_group}_{rider_id}_OW"
         rt_id = f"{route_group}_{rider_id}_RT"
         rider_short = RIDER_SHORT_NAME[rider_id]
+        rider_short_en = RIDER_SHORT_NAME_EN[rider_id]
         place_a, place_b = AREAS[area_a], AREAS[area_b]
 
         fare_products_rows.append({
@@ -139,6 +181,18 @@ def build_tables():
             "rider_category_id": rider_id,
             "amount": f"{return_fare:.2f}",
             "currency": CURRENCY,
+        })
+        translations_rows.append({
+            "table_name": "fare_products", "field_name": "fare_product_name", "language": "en",
+            "translation": f"{place_a} \u2013 {place_b} one-way ({rider_short_en})",
+            "record_id": "", "record_sub_id": "",
+            "field_value": f"{place_a} \u2013 {place_b} aller simple ({rider_short})",
+        })
+        translations_rows.append({
+            "table_name": "fare_products", "field_name": "fare_product_name", "language": "en",
+            "translation": f"{place_a} \u2013 {place_b} return ({rider_short_en})",
+            "record_id": "", "record_sub_id": "",
+            "field_value": f"{place_a} \u2013 {place_b} aller-retour ({rider_short})",
         })
 
         # One row per direction, each referencing both the one-way and
@@ -158,6 +212,7 @@ def build_tables():
         "stop_areas.txt": stop_areas_rows,
         "fare_products.txt": fare_products_rows,
         "fare_leg_rules.txt": fare_leg_rules_rows,
+        "translations.txt": translations_rows,
     }
 
 
@@ -199,6 +254,17 @@ def merge_into_gtfs_zip(fares_tables, existing_gtfs_zip, out_path, unzipped_out=
     zip (e.g. the one produced by spm_gtfs.py) so you end up with one feed."""
     with zipfile.ZipFile(existing_gtfs_zip, "r") as zin:
         existing = {name: zin.read(name) for name in zin.namelist()}
+
+    fares_tables = dict(fares_tables)  # don't mutate caller's dict
+
+    # translations.txt: both the schedule feed (stop names) and this fares
+    # module (rider categories, fare products) contribute rows to the SAME
+    # file. Combine them rather than letting fares_tables blindly overwrite
+    # the schedule's rows below -- everything else is genuinely
+    # fares-owned and fine to overwrite outright.
+    if "translations.txt" in existing and fares_tables.get("translations.txt"):
+        reader = csv.DictReader(io.StringIO(existing["translations.txt"].decode("utf-8")))
+        fares_tables["translations.txt"] = list(reader) + fares_tables["translations.txt"]
 
     merged_files = dict(existing)
     for filename, rows in fares_tables.items():
